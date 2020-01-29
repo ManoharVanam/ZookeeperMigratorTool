@@ -30,7 +30,7 @@ class DataStatAclNode {
     private final String path;
 //    private final byte[] data;
     private final String data;
-    private String dataString = "";
+//    private String dataString = "";
     private final Stat stat;
     private final List<ACL> acls;
     private final long ephemeralOwner;
@@ -39,9 +39,9 @@ class DataStatAclNode {
     DataStatAclNode(String path, String data, Stat stat, List<ACL> acls, long ephemeralOwner) {
         this.path = Preconditions.checkNotNull(path, "path can not be null");
         this.data = data;
-        if(null != data) {
-            this.dataString = new String(data);
-        }
+//        if(null != data) {
+//            this.dataString = new String(data);
+//        }
         this.stat = Preconditions.checkNotNull(stat, "stat can not be null");
         this.acls = acls == null ? ImmutableList.of() : ImmutableList.copyOf(acls);
         this.ephemeralOwner = ephemeralOwner;

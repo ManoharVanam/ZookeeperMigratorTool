@@ -27,12 +27,7 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.zookeeper.KeeperException;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.PrintStream;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.concurrent.ExecutionException;
@@ -53,9 +48,16 @@ public class ZooKeeperMigratorMain {
             .build();
     private static final Option OPTION_ZK_ENDPOINT = Option.builder("z")
             .longOpt("zookeeper")
-            .desc("ZooKeeper endpoint string (ex. host:port/path)")
+            .desc("ZooKeeper endpoint string (ex. host:port)")
             .hasArg()
             .argName("zookeeper-endpoint")
+            .required()
+            .build();
+    private static final Option OPTION_ZK_PATHS = Option.builder("p")
+            .longOpt("paths")
+            .desc("Zookeeper paths (ex: /kafka,/brokers)")
+            .hasArg()
+            .argName("multiple paths")
             .required()
             .build();
     private static final Option OPTION_RECEIVE = Option.builder("r")
@@ -79,13 +81,20 @@ public class ZooKeeperMigratorMain {
             .argName("jaas-filename")
             .numberOfArgs(1)
             .build();
-    private static final Option OPTION_FILE = Option.builder("f")
-            .longOpt("file")
-            .desc("file to be used for ZooKeeper data")
+//    private static final Option OPTION_FILES = Option.builder("f")
+//            .longOpt("file")
+//            .desc("file to be used for ZooKeeper data")
+//            .hasArg()
+//            .argName("filename")
+//            .build();
+    private static final Option OPTION_DIR = Option.builder("d")
+            .longOpt("directory")
+            .desc("directory to be used for ZooKeeper data")
             .hasArg()
-            .argName("filename")
+            .argName("directory")
             .build();
-    private static final Option OPTION_IGNORE_SOURCE = Option.builder()
+
+    private static final Option OPTION_IGNORE_SOURCE = Option.builder("i")
             .longOpt("ignore-source")
             .desc("ignores the source ZooKeeper endpoint specified in the exported data")
             .build();
@@ -98,8 +107,10 @@ public class ZooKeeperMigratorMain {
         final Options options = new Options();
         options.addOption(OPTION_ZK_MIGRATOR_HELP);
         options.addOption(OPTION_ZK_ENDPOINT);
+        options.addOption(OPTION_ZK_PATHS);
         options.addOption(OPTION_ZK_AUTH_INFO);
-        options.addOption(OPTION_FILE);
+//        options.addOption(OPTION_FILES);
+        options.addOption(OPTION_DIR);
         options.addOption(OPTION_IGNORE_SOURCE);
         options.addOption(OPTION_USE_EXISTING_ACL);
         final OptionGroup optionGroupAuth = new OptionGroup().addOption(OPTION_ZK_AUTH_INFO).addOption(OPTION_ZK_KRB_CONF_FILE);
@@ -135,8 +146,10 @@ public class ZooKeeperMigratorMain {
                 printUsage(null, options);
             } else {
                 final String zookeeperUri = commandLine.getOptionValue(OPTION_ZK_ENDPOINT.getOpt());
+                final String paths = commandLine.getOptionValue(OPTION_ZK_PATHS.getOpt());
                 final Mode mode = commandLine.hasOption(OPTION_RECEIVE.getOpt()) ? Mode.READ : Mode.WRITE;
-                final String filename = commandLine.getOptionValue(OPTION_FILE.getOpt());
+//                final String filename = commandLine.getOptionValue(OPTION_FILES.getOpt());
+                final String dirName = commandLine.getOptionValue(OPTION_DIR.getOpt());
                 final String auth = commandLine.getOptionValue(OPTION_ZK_AUTH_INFO.getOpt());
                 final String jaasFilename = commandLine.getOptionValue(OPTION_ZK_KRB_CONF_FILE.getOpt());
                 final boolean ignoreSource = commandLine.hasOption(OPTION_IGNORE_SOURCE.getLongOpt());
@@ -156,14 +169,30 @@ public class ZooKeeperMigratorMain {
                     }
                 }
 
-                final ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri);
+//                final ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri);
                 if (mode.equals(Mode.READ)) {
-                    try (OutputStream zkData = filename != null ? new FileOutputStream(Paths.get(filename).toFile()) : output) {
-                        zookeeperMigrator.readZooKeeper(zkData, authMode, authData);
+                    // reading multiple paths and storing in output dir with path name as file name.
+                    String[] pathArray = paths.split(",");
+                    for(int i = 0 ; i < pathArray.length ; i++) {
+                        ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri+pathArray[i]);
+                        String file = getFileName(dirName, pathArray[i]);
+                        try (OutputStream zkData = file != null ? new FileOutputStream(Paths.get(file).toFile()) : output) {
+                            zookeeperMigrator.readZooKeeper(zkData, authMode, authData);
+                        }
                     }
+
                 } else {
-                    try (InputStream zkData = filename != null ? new FileInputStream(Paths.get(filename).toFile()) : System.in) {
-                        zookeeperMigrator.writeZooKeeper(zkData, authMode, authData, ignoreSource, useExistingACL);
+                    // read multiple files and write into one zookeeper path
+                    if(paths.split(",").length > 1){
+                        throw new IOException("Single zookeeper path is allowed.");
+                    }
+                    ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri+paths);
+                    File[] files = Paths.get(dirName).toFile().listFiles();
+                    for(File file : files) {
+
+                        try (InputStream zkData = file != null ? new FileInputStream(file) : System.in) {
+                            zookeeperMigrator.writeZooKeeper(zkData, authMode, authData, ignoreSource, useExistingACL);
+                        }
                     }
                 }
             }
@@ -172,5 +201,11 @@ public class ZooKeeperMigratorMain {
         } catch (IOException | KeeperException | InterruptedException | ExecutionException e) {
             throw new IOException(String.format("unable to perform operation: %s", e.getLocalizedMessage()), e);
         }
+    }
+
+    private static String getFileName(String filename, String path) {
+        path = path.replaceAll("/","_");
+        return filename + "zk" + path + "_data.json";
+
     }
 }
