@@ -172,12 +172,12 @@ public class ZooKeeperMigratorMain {
 //                final ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri);
                 if (mode.equals(Mode.READ)) {
                     // reading multiple paths and storing in output dir with path name as file name.
+                    ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri);
                     String[] pathArray = paths.split(",");
                     for(int i = 0 ; i < pathArray.length ; i++) {
-                        ZooKeeperMigrator zookeeperMigrator = new ZooKeeperMigrator(zookeeperUri+pathArray[i]);
                         String file = getFileName(dirName, pathArray[i]);
-                        try (OutputStream zkData = file != null ? new FileOutputStream(Paths.get(file).toFile()) : output) {
-                            zookeeperMigrator.readZooKeeper(zkData, authMode, authData);
+                        try (OutputStream zkData = file != null  ? new FileOutputStream(Paths.get(file).toFile()) : output) {
+                            zookeeperMigrator.readZooKeeper(zkData, authMode, authData, pathArray[i]);
                         }
                     }
 

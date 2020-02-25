@@ -74,7 +74,7 @@ class ZooKeeperMigrator {
         this.zooKeeperEndpointConfig = new ZooKeeperEndpointConfig(zooKeeperConnectString);
     }
 
-    void readZooKeeper(OutputStream zkData, AuthMode authMode, byte[] authData) throws IOException, KeeperException, InterruptedException, ExecutionException {
+    void readZooKeeper(OutputStream zkData, AuthMode authMode, byte[] authData, String nodePath) throws IOException, KeeperException, InterruptedException, ExecutionException {
         ZooKeeper zooKeeper = getZooKeeper(zooKeeperEndpointConfig.getConnectString(), authMode, authData);
         JsonWriter jsonWriter = new JsonWriter(new BufferedWriter(new OutputStreamWriter(zkData)));
         jsonWriter.setIndent("  ");
@@ -87,7 +87,7 @@ class ZooKeeperMigrator {
         gson.toJson(jsonParser.parse(gson.toJson(zooKeeperEndpointConfig)).getAsJsonObject(), jsonWriter);
 
         LOGGER.info("Retrieving data from source ZooKeeper: {}", zooKeeperEndpointConfig);
-        final List<CompletableFuture<Void>> readFutures = streamPaths(getNode(zooKeeper, "/"))
+        final List<CompletableFuture<Void>> readFutures = streamPaths(getNode(zooKeeper, nodePath))
                 .parallel()
                 .map(node ->
                         CompletableFuture.supplyAsync(() -> {
